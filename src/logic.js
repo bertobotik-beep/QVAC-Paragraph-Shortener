@@ -30,13 +30,29 @@ function extractiveFallback(text) {
   return out;
 }
 
-// Light grounding guard: if the summary introduces a 4+ digit number that
-// never appears anywhere in the source text, it's likely a hallucinated
-// fact, so fall back to the extractive summary instead.
+const NUMBER_WORDS = {
+  one: "1", two: "2", three: "3", four: "4", five: "5", six: "6", seven: "7",
+  eight: "8", nine: "9", ten: "10", eleven: "11", twelve: "12", thirteen: "13",
+  fourteen: "14", fifteen: "15", sixteen: "16", seventeen: "17", eighteen: "18",
+  nineteen: "19", twenty: "20", thirty: "30", forty: "40", fifty: "50",
+  sixty: "60", seventy: "70", eighty: "80", ninety: "90", hundred: "100",
+  thousand: "1000", million: "1000000", billion: "1000000000",
+};
+
+// Light grounding guard: if the summary introduces a 3+ digit number that
+// never appears anywhere in the source text (as digits OR spelled out), it's
+// likely a hallucinated fact, so fall back to the extractive summary instead.
+// 1-2 digit numbers are exempt since the model legitimately converts spelled-
+// out numbers ("fifteen percent" -> "15%") which would otherwise false-positive.
 function hasInventedNumbers(summary, source) {
-  const summaryNums = summary.match(/\b\d{2,}\b/g) || [];
+  const sourceLower = source.toLowerCase();
+  const sourceDigitEquivalents = new Set();
+  for (const [word, digit] of Object.entries(NUMBER_WORDS)) {
+    if (sourceLower.includes(word)) sourceDigitEquivalents.add(digit);
+  }
+  const summaryNums = summary.match(/\b\d{3,}\b/g) || [];
   for (const n of summaryNums) {
-    if (!source.includes(n)) return true;
+    if (!source.includes(n) && !sourceDigitEquivalents.has(n)) return true;
   }
   return false;
 }
