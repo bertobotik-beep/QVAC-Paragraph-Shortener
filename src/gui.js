@@ -18,10 +18,24 @@ function serveStatic(res) {
   res.end(html);
 }
 
+// Cap the request body so an accidental multi-megabyte paste (or a bad actor)
+// can't make the server buffer an unbounded amount of memory before logic.js
+// gets a chance to truncate the text down to its 6000-character prompt window.
+const MAX_BODY_BYTES = 2 * 1024 * 1024; // 2MB, far more than any pasted paragraph needs
+
 function readBody(req) {
-  return new Promise((resolve) => {
+  return new Promise((resolve, reject) => {
     let body = "";
-    req.on("data", (chunk) => (body += chunk));
+    let bytes = 0;
+    req.on("data", (chunk) => {
+      bytes += chunk.length;
+      if (bytes > MAX_BODY_BYTES) {
+        reject(new Error("Request body too large"));
+        req.destroy();
+        return;
+      }
+      body += chunk;
+    });
     req.on("end", () => {
       try {
         resolve(JSON.parse(body || "{}"));
@@ -29,6 +43,7 @@ function readBody(req) {
         resolve({});
       }
     });
+    req.on("error", reject);
   });
 }
 
@@ -52,7 +67,8 @@ async function main() {
         res.writeHead(200, { "Content-Type": "application/json; charset=utf-8" });
         res.end(JSON.stringify(result));
       } catch (error) {
-        res.writeHead(500, { "Content-Type": "application/json; charset=utf-8" });
+        const status = error.message === "Request body too large" ? 413 : 500;
+        res.writeHead(status, { "Content-Type": "application/json; charset=utf-8" });
         res.end(JSON.stringify({ error: error.message }));
       }
       return;
