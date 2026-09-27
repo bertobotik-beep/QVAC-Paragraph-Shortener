@@ -1,0 +1,8 @@
+node_modules/
+.claude/
+.qvac/
+qvac.config.json
+npm-debug.log*
+.DS_Store
+run.log
+run.err.log
